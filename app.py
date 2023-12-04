@@ -1,50 +1,62 @@
-# Import necessary modules
-from flask import Flask, jsonify, request
+from flask import Flask, request, jsonify, abort
 import json
 
-# Create Flask app
-app = Flask(__name__)
+def create_app():
+    app = Flask(__name__)
 
-# Read tweet data from the JSON file
-with open('100tweets.json', 'r') as file:
-    tweet_data = json.load(file)
+    # Load tweet data from the file
+    with open("100tweets.json", "r") as file:
+        tweets = json.load(file)
 
-# 2. Hello World endpoint
-@app.route('/', methods=['GET'])
-def hello_world():
-    return "Hello World!"
+    @app.route('/')
+    def hello_world():
+        return 'Hello World.'
 
-# 3. Get all tweets endpoint
-@app.route('/tweets', methods=['GET'])
-def get_all_tweets():
-    return jsonify(tweet_data)
+    @app.route('/tweets', methods=['GET'])
+    def get_all_tweets():
+        try:
+            # Example: /tweets?filter_param=value
+            filter_param = request.args.get('filter_param')
+            
+            if filter_param:
+                filtered_tweets = [tweet for tweet in tweets if tweet.get('filter_field') == filter_param]
+                return jsonify(filtered_tweets)
+            else:
+                return jsonify(tweets)
 
-# 4. Filter tweets by a query parameter
-@app.route('/tweets/filter', methods=['GET'])
-def filter_tweets():
-    query_param = request.args.get('query')
-    filtered_tweets = [tweet for tweet in tweet_data if query_param.lower() in tweet['text'].lower()]
-    return jsonify(filtered_tweets)
+        except Exception as e:
+            return str(e), 500
 
-# 5. Get a specific tweet by ID
-@app.route('/tweet/<int:tweet_id>', methods=['GET'])
-def get_tweet_by_id(tweet_id):
-    try:
-        tweet = next(tweet for tweet in tweet_data if tweet['id'] == tweet_id)
-        return jsonify(tweet)
-    except StopIteration:
-        return jsonify({'error': 'Tweet not found'}), 404
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+    @app.route('/tweets', methods=['POST'])
+    def create_tweet():
+        try:
+            data = request.get_json()
+            if 'text' not in data:
+                abort(400, description="Incomplete request: 'text' field is required.")
 
-# 6. Handle errors with Try/Except
+            new_tweet = {
+                'id': len(tweets) + 1,
+                'text': data['text']
+            }
 
-# 7. Run the app
+            tweets.append(new_tweet)
+
+            return jsonify(new_tweet), 201  # 201 Created status code for successful creation
+        except Exception as e:
+            return str(e), 400  # 400 Bad Request status code for unsuccessful request
+
+    @app.route('/tweet/<int:tweet_id>', methods=['GET'])
+    def get_tweet_by_id(tweet_id):
+        try:
+            tweet = next((tweet for tweet in tweets if tweet['id'] == tweet_id), None)
+            if tweet:
+                return jsonify(tweet)
+            else:
+                abort(404, description="Tweet not found")
+        except Exception as e:
+            return str(e), 400
+
+    return app
+
 if __name__ == '__main__':
-    app.run(debug=True)
-
-# Sample curl requests:
-# 1. curl http://localhost:5000/
-# 2. curl http://localhost:5000/tweets
-# 3. curl http://localhost:5000/tweets/filter?query=some_keyword
-# 4. curl http://localhost:5000/tweet/1
+    create_app().run(debug=True)
